@@ -1,6 +1,6 @@
 <?php
 
-# IMAGE BACKUP & ARKIV WITH DUP CHECK (MD5)
+
 
 
 include_once "vendor/autoload.php";
@@ -29,42 +29,7 @@ use Intervention\Image\ImageManagerStatic as Image;
 # Elequent form  composer
 # https://stackoverflow.com/questions/26083175/can-i-use-laravels-database-layer-standalone
 
-/**
 
-Photo backup script (work in progress)
-- show pics in google maps  (gps extract)
-- rename files to smart format
-- move files to a smart named dir (year-month?)
-- save names to sqlite db
-- optional: save/backup the files(contents) into local sqllite db (optionally copy that db to remove place/website)
-- calculate checksums in db to find dups
-- google map plotter
-- google map path(line) tracker from  dates in images.   each dot with date/time
-
-
-
-idea is to dump all your pics from a SD card or iphone in a dir(or subdir) and run the script.
-the script will fix the filenames(optional) and add them to a website or backup location(optional)
-
-TODO:   scan dirs and show rename suggestions output like
-        HP9394374.JPG    => 171231-2359-001.jpg
-
-        scan to import loose files form subdir argument
-        -scan path/to/dir
-        if regex match YYMMDD  -> suggest move to a YYMM directory 
-        
-
-        
-
-commandline arguments --help
-
--s (save all files to sqlite db in same dir)
--c copy files to remote location
--r rename the files to a smart convention
--d dupes . show duplicate files (same checksum)
--h generate html gallery files
-
-**/
 
 
 
@@ -158,6 +123,62 @@ backup::run();
 
 
 class backup {
+
+    /**
+
+        Photo backup script (work in progress)
+        IMAGE BACKUP & ARKIV WITH DUP CHECK (MD5)
+
+        Idea is to dump all your pics from a SD card or iphone export in a a dir or in the arkiv and run the script.
+        the script will detect, fix and sort the images
+
+        TODO:   scan dirs and show rename suggestions output like
+                HP9394374.JPG    => 171231-2359-001.jpg
+
+                scan to import loose files form subdir argument
+                -scan path/to/dir
+                if regex match YYMMDD  -> suggest move to a YYMM directory 
+
+        GOAL
+        - Sort images in folders by 
+            1 filedate
+            2 exif data
+
+        - rename images to dateformat (exif if possible else filedate)
+
+        
+        TODO
+        - show pics in google maps  (gps extract)
+        - rename files to smart format
+        - optional: save/backup the files(contents) into local sqllite db (optionally copy that db to remove place/website)
+        - google map plotter
+        - google map path(line) tracker from  dates in images.   each dot with date/time
+        - copy/backup archive to remote places (scp ssh?)
+        - Future ideas: handle video & all other types of files to backup. txt
+        - Future ideas: handle optional encryption
+        - Future ideas: detect other remote/backup sources (array) and updated them
+        - Future ideas: Set (default) read dirs and output dirs in windows/linux docuement/user/Pictures folder etc
+        - Future ideas: crontab or win schedule sorting of users images
+
+        DONE
+        - save names to sqlite db
+        - move files to a smart named dir (year-month?) 
+        - calculate checksums in db to find dups
+        
+        USAGE                
+
+        commandline arguments --help
+
+        -s (save all files to sqlite db in same dir)
+        -c copy files to remote location
+        -r rename the files to a smart convention
+        -d dupes . show duplicate files (same checksum)
+        -h generate html gallery files
+
+    **/
+
+
+
     public $file_ext, $dirs, $db_mode;
     
     #$db_mode = 'mysql';
@@ -187,8 +208,14 @@ class backup {
         
         self::clean_db();
         self::scan();
-        self::dupes();
-        self::move();
+        self::dupes(); # find dupes
+        self::move();  # move dupes
+        self::clean_filenames(); # strip spaces, lower case.. etc
+
+
+
+        #self::backup_to_remote_server(); # 
+
 
         #backup::exportfiles();
         #backup::rename_images(); #broken ..  fix this soon
@@ -206,6 +233,37 @@ class backup {
         echo "\nDone";
 
     }
+
+
+
+    static function clean_filenames(){ # remove spaces, and ser lower case
+        
+        foreach (R::findAll( 'img' ) as $img) {
+            
+            $destination = $img->filename;
+
+            #$newfile = strtolower($dupe->filename);
+            #$newfile = str_replace("\/", '_', $newfile);
+            #$newfile = "duplicates\\$newfile";
+
+            #$filename    = self::filename_from_path($img->filename);
+            #$year        = date("Y",strtotime($img->datetaken));
+            #$yearmonth   = date("ym",strtotime($img->datetaken));
+            #$destination = "arkiv\\$year\\$yearmonth\\$filename";
+            
+            $destination = str_replace(" ", '_', $destination);
+            $destination = strtolower($destination);
+
+            if ( $img->filename != $destination ){
+                if( self::mv($img, $img->filename, $destination) ){
+                    echo "\nClean filename $img->filename -> $destination";
+                }
+            }
+
+
+        }
+    }
+
 
     static function quick_sort(){ # quick sort before archiving
         
@@ -251,11 +309,33 @@ class backup {
                 $destination = strtolower($destination);
 
                 if( self::mv($img, $img->filename, $destination) ){
-                    echo "\nMoved $img->filename -> $destination";
+                    echo "\nSorting datetaken $img->filename -> $destination";
                 }
 
 
             }
+        }
+
+        foreach (R::findAll( 'img',"datetaken is NULL " ) as $img) { # sort files with exif date directly into archive folders
+            echo "\nSort by filedate $img->filename";
+            // if ( $img->datetaken != ''   ) {
+            //     #$newfile = strtolower($dupe->filename);
+            //     #$newfile = str_replace("\/", '_', $newfile);
+            //     #$newfile = str_replace("\\", '_', $newfile);
+            //     #$newfile = "duplicates\\$newfile";
+
+            //     $filename    = self::filename_from_path($img->filename);
+            //     $year        = date("Y",strtotime($img->datetaken));
+            //     $yearmonth   = date("ym",strtotime($img->datetaken));
+            //     $destination = "arkiv\\$year\\$yearmonth\\$filename";
+            //     $destination = strtolower($destination);
+
+            //     if( self::mv($img, $img->filename, $destination) ){
+            //         echo "\nSorting filedate $img->filename -> $destination";
+            //     }
+
+
+            #}
         }
     }
 
@@ -412,6 +492,13 @@ class backup {
     }
 
     static function exif($img = null) {
+
+
+        /**
+
+            Try to extract Exif data 
+
+        **/
 
         ini_set('memory_limit', '1024M'); // or you could use 1G
 
@@ -574,7 +661,13 @@ class backup {
     }
 
 
-    static function datetaken($img){  # detect date taken for img and store  in db  field datetaken
+    static function datetaken($img){  
+
+        /**
+         
+         Detect best date-taken from exif data and store in db field datetaken
+
+         **/
 
 
         if ( $img->exif != '' && $img->datetaken == ''){
