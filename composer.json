@@ -1,0 +1,7 @@
+{
+    "require": {
+        "diversen/gps-from-exif": "^1.0",
+        "miljar/php-exif": "^0.6.3",
+        "intervention/image": "^2.4"
+    }
+}
