@@ -1,5 +1,5 @@
 <?php
-
+echo "\nIMAGE BACKUP & ARKIV\n";
 
 
 
@@ -93,6 +93,7 @@ if ($db == 'sqlite'){
 #backup::rename_images(); #broken ..  fix this soon
 
 backup::run();
+#backup::fix_filenames();
 
 #backup::is_good_filename('img\1\mapp\iphone_pix\10x00206.jpg');
 
@@ -179,7 +180,12 @@ class backup {
 
 
 
-    public $file_ext, $dirs, $db_mode, $backup_dir;
+    public $file_ext;
+    public $dirs;
+    public $backup_dir = 'arkiv';
+    public $db_type = 'mysql';
+
+
     
     #$db_mode = 'mysql';
 
@@ -191,16 +197,21 @@ class backup {
     #$dirs[]            = 'img';
     #$destintation_path = "sorted\\";
 
+
     
     public function __construct() {
 
         #not used yet
         #self::run();
-        $this->db_mode = 'mysql';
+        #$this->db_mode = 'mysql';
         $this->backup_dir = 'arkiv';
+
 
     }
 
+    public function db_setup(){
+
+    }
     
 
     static function run(){ # normal full run 
@@ -211,7 +222,9 @@ class backup {
         self::scan();
         self::dupes(); # find dupes
         self::move();  # move dupes
-        self::clean_filenames(); # strip spaces, lower case.. etc
+
+        #self::clean_filenames(); # strip spaces, lower case.. etc
+
 
 
 
@@ -230,13 +243,17 @@ class backup {
 
         }
         
-        self::quick_sort();
+        #self::quick_sort(); #dup code  ?
+        self::fix_filenames();  # sorts too
         echo "\nDone";
 
     }
 
 
 
+    
+
+    # remove this?
     static function clean_filenames(){ # remove spaces, and ser lower case
         
         foreach (R::findAll( 'img' ) as $img) {
@@ -267,7 +284,12 @@ class backup {
     }
 
 
-    static function quick_sort(){ # quick sort before archiving
+    
+    #  see fix filenames insted .   DUP CODE!
+    public static function quick_sort(){ # quick sort before archiving
+
+
+        $backup_dir = 'arkiv';
         
         // foreach (R::find( 'img' ) as $img) {
         //     #$newfile = strtolower($dupe->filename);
@@ -310,7 +332,8 @@ class backup {
                 $filename    = self::filename_from_path($img->filename);
                 $yyyy        = date("Y",strtotime($img->datetaken));
                 $yymm        = date("ym",strtotime($img->datetaken));
-                $destination = "arkiv\\$yyyy\\$yymm\\$filename";
+                #$destination = "arkiv\\$yyyy\\$yymm\\$filename";
+                $destination = $backup_dir."\\$yyyy\\$yymm\\$filename";
                 $destination = strtolower($destination);
 
                 if( self::mv($img, $img->filename, $destination) ){
@@ -323,7 +346,7 @@ class backup {
 
         foreach (R::findAll( 'img',"datetaken is NULL " ) as $img) {  
 
-            # Sort by file date
+            # NO EXIF  > Sort by file date
             
             #if ( $img->datetaken != ''   ) {
                 #$newfile = strtolower($dupe->filename);
@@ -344,7 +367,8 @@ class backup {
 
 
                 $filename    = date("ymd_His_".$img->id,strtotime($img->filemtime)).".$ext";
-                $destination = "arkiv\\$yyyy\\$yymm\\$filename";
+                #$destination = "arkiv\\$yyyy\\$yymm\\$filename";
+                $destination = $backup_dir."\\$yyyy\\$yymmdd\\$filename";
                 $destination = strtolower($destination);
 
                 if( self::mv($img, $img->filename, $destination) ){
@@ -357,8 +381,76 @@ class backup {
         }
     }
 
+    public static function fix_filenames(){ 
 
-    static function mv($img,$src,$dst){
+        # Rename file to date format yymmdd_hhiiss_id.ext
+        # but dont move
+
+
+        $backup_dir = "arkiv";
+        
+        function validate($input){
+
+            $validformat = "*^[0-9]{6}_[0-9]{6}*";
+            if ( preg_match($validformat, $input) ){
+                return 1;
+            }else{
+                return 0;
+            }
+        }
+
+        foreach (R::findAll( 'img' ) as $img) {  
+
+            $filename       = self::filename_from_path($img->filename);
+
+            $exploded       = explode('.', $filename);
+            $ext            = $exploded[count($exploded)-1];
+
+            if (!validate($filename)){
+                
+
+                if ($img->datetaken != ''){  # no exif   rename to filedate
+                    $filename_from_date = date("ymd_His_".$img->id,strtotime($img->filemtime)).".$ext";
+                    $filename_from_date =  strtolower($filename_from_date);
+
+
+                    $yyyy        = date("Y",strtotime($img->filemtime));
+                    $yymmdd      = date("ymd",strtotime($img->filemtime));
+                    #$yymm        = date("ym",strtotime($img->filemtime));
+
+
+                    #$filename    = date("ymd_His_".$img->id,strtotime($img->filemtime)).".$ext";
+                    $destination = $backup_dir."\\$yyyy\\$yymmdd\\$filename_from_date";
+                    $destination = strtolower($destination);
+
+                    if ($img->filename != $destination){
+
+                        if (self::mv($img,$img->filename,$destination)){
+                            echo "\nFix filename: $filename -> $destination";
+                            $img->filename = $destination;
+                            R::store($img);
+                        }
+
+                    }
+
+
+
+                }
+            }
+
+
+            
+            
+
+
+
+        }
+
+
+    }
+
+
+    public static function mv($img,$src,$dst){
 
         if (is_file($src) && $src != $dst){
             @mkdir(dirname($dst), 0777, true);
