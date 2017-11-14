@@ -204,13 +204,12 @@ class backup {
         #not used yet
         #self::run();
         #$this->db_mode = 'mysql';
-        $this->backup_dir = 'arkiv';
+        #$this->backup_dir = 'arkiv';
 
 
     }
 
     public function db_setup(){
-
     }
     
 
@@ -243,8 +242,9 @@ class backup {
 
         }
         
-        #self::quick_sort(); #dup code  ?
-        self::fix_filenames();  # sorts too
+        self::sort_files(); #
+        #self::sort_exif(); #
+        #self::fix_filenames();  # sorts too
         echo "\nDone";
 
     }
@@ -285,39 +285,13 @@ class backup {
 
 
     
-    #  see fix filenames insted .   DUP CODE!
-    public static function quick_sort(){ # quick sort before archiving
+    
+    public static function sort_files(){ # quick sort before archiving
 
 
         $backup_dir = 'arkiv';
         
-        // foreach (R::find( 'img' ) as $img) {
-        //     #$newfile = strtolower($dupe->filename);
-        //     #$newfile = str_replace("\/", '_', $newfile);
-        //     #$newfile = str_replace("\\", '_', $newfile);
-        //     #$newfile = "duplicates\\$newfile";
-
-        //     if (!strpos($img->filename, 'quickSort')) {
-
-        //         $filename = self::filename_from_path($img->filename);
-        //         $year = date("Y",strtotime($img->filemtime));
-        //         $destination = 'arkiv\\quickSort\\'.$year."\\".$filename;
-
-        //         if (is_file($img->filename)){
-        //             @mkdir(dirname($destination), 0777, true);
-
-        //             echo "\nMoving: $img->filename -> $destination quickSort";
-
-        //             if (!rename($img->filename, $destination)) {
-        //                 echo "Failed!\nfailed to move $img->filename to $destination";
-        //             }else{
-        //                 $img->filename = $destination;
-        //                 R::store( $img );
-        //                 #R::trash( $dupe );
-        //             }
-        //         }
-        //     }
-        // }
+        
 
         foreach (R::findAll( 'img',"datetaken != '' " ) as $img) { 
 
@@ -331,13 +305,13 @@ class backup {
 
                 $filename    = self::filename_from_path($img->filename);
                 $yyyy        = date("Y",strtotime($img->datetaken));
-                $yymm        = date("ym",strtotime($img->datetaken));
+                $yymmdd      = date("ymd",strtotime($img->datetaken));
                 #$destination = "arkiv\\$yyyy\\$yymm\\$filename";
-                $destination = $backup_dir."\\$yyyy\\$yymm\\$filename";
+                $destination = $backup_dir."\\$yyyy\\$yymmdd\\$filename";
                 $destination = strtolower($destination);
 
                 if( self::mv($img, $img->filename, $destination) ){
-                    echo "\nSorting datetaken $img->filename -> $destination";
+                    echo "\nSort by EXIF date $img->filename -> $destination";
                 }
 
 
@@ -379,16 +353,10 @@ class backup {
 
             #}
         }
-    }
-
-    public static function fix_filenames(){ 
-
-        # Rename file to date format yymmdd_hhiiss_id.ext
-        # but dont move
 
 
-        $backup_dir = "arkiv";
-        
+
+
         function validate($input){
 
             $validformat = "*^[0-9]{6}_[0-9]{6}*";
@@ -399,52 +367,108 @@ class backup {
             }
         }
 
+
+
+
+        # old rename check merge functions
+
         foreach (R::findAll( 'img' ) as $img) {  
 
             $filename       = self::filename_from_path($img->filename);
+            $destination    = $img->filename;
 
             $exploded       = explode('.', $filename);
             $ext            = $exploded[count($exploded)-1];
 
-            if (!validate($filename)){
+            if (!validate($filename)){ # filename is bad
                 
 
-                if ($img->datetaken != ''){  # no exif   rename to filedate
+                if ($img->datetaken == '' || $img->datetaken == NULL){  # HAS exif   rename to filedate
+
                     $filename_from_date = date("ymd_His_".$img->id,strtotime($img->filemtime)).".$ext";
                     $filename_from_date =  strtolower($filename_from_date);
 
 
                     $yyyy        = date("Y",strtotime($img->filemtime));
                     $yymmdd      = date("ymd",strtotime($img->filemtime));
-                    #$yymm        = date("ym",strtotime($img->filemtime));
 
 
                     #$filename    = date("ymd_His_".$img->id,strtotime($img->filemtime)).".$ext";
                     $destination = $backup_dir."\\$yyyy\\$yymmdd\\$filename_from_date";
                     $destination = strtolower($destination);
+                    $msg = 'date sort';
+                }
 
-                    if ($img->filename != $destination){
+                if ($img->datetaken == ''){  # no exif   rename to filedate
 
-                        if (self::mv($img,$img->filename,$destination)){
-                            echo "\nFix filename: $filename -> $destination";
-                            $img->filename = $destination;
-                            R::store($img);
-                        }
-
-                    }
+                    $filename_from_date = date("ymd_His_".$img->id,strtotime($img->filemtime)).".$ext";
+                    $filename_from_date =  strtolower($filename_from_date);
 
 
+                    $yyyy        = date("Y",strtotime($img->filemtime));
+                    $yymmdd      = date("ymd",strtotime($img->filemtime));
 
+
+                    #$filename    = date("ymd_His_".$img->id,strtotime($img->filemtime)).".$ext";
+                    $destination = $backup_dir."\\$yyyy\\$yymmdd\\$filename_from_date";
+                    $destination = strtolower($destination);
+                    $msg = 'exif sort';
+                }
+
+
+
+
+            }
+
+
+
+
+            #path remake check
+            #if ($img->datetaken != ''){  # no exif   rename to filedate
+
+
+
+
+
+
+            if ($img->filename != $destination){
+
+                if (self::mv($img,$img->filename,$destination)){
+                    echo "\nFix filename: $filename -> $destination";
+                    $img->filename = $destination;
+                    R::store($img);
                 }
             }
 
 
-            
-            
+        } # end of file checks
 
 
 
-        }
+
+
+
+    }
+
+    public static function fix_filenames(){ 
+
+        /**
+
+            Figure out what any file path + name should be. 
+            If it's not, then fix and move it.
+
+            Rename file to date format yymmdd_hhiiss_id.ext
+            but dont move
+
+        **/
+
+
+
+
+
+        $backup_dir = "arkiv";
+        
+
 
 
     }
@@ -452,23 +476,27 @@ class backup {
 
     public static function mv($img,$src,$dst){
 
-        if (is_file($src) && $src != $dst){
-            @mkdir(dirname($dst), 0777, true);
+        if ($src != $dst){
 
-            #echo "\nMoving: $img->filename -> $destination  final sort";
+            if (is_file($src)){
+                @mkdir(dirname($dst), 0777, true);
 
-            if (!rename($src, $dst)) {
-                echo "Failed!\nfailed to move $src to $dst";
-                return 0;
+                #echo "\nMoving: $img->filename -> $destination  final sort";
+
+                if (!rename($src, $dst)) {
+                    echo "Failed!\nfailed to move $src to $dst";
+                    return 0;
+                }else{
+                    $img->filename = $dst;
+                    R::store( $img );
+                    return 1;
+                }
             }else{
-                $img->filename = $dst;
-                R::store( $img );
-                return 1;
+                #return 'file is allready moved there';
+                return 0;
             }
-        }else{
-            #return 'file is allready moved there';
-            return 0;
         }
+        return 0;
 
     }
 
@@ -978,28 +1006,6 @@ class backup {
         }
     }
 
-
-
-    static function sort_files()    #old tests
-    { 
-        # test code
-        $file = 'img\temp\IMG_0599.JPG';
-        $newfile = 'img_sorted\temp\IMG_0599.JPG';
-
-
-        if (is_file($file)){
-            echo "$file <- exists";
-        }
-
-        @mkdir(dirname($newfile), 0777, true);
-
-
-        if (!copy($file, $newfile)) {
-            echo "\nfailed to copy $file to $newfile \n";
-        }else{
-            echo "\ncopied $file to $newfile \n";
-        }
-    }    
 
 }
 
