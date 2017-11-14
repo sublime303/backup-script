@@ -179,7 +179,7 @@ class backup {
 
 
 
-    public $file_ext, $dirs, $db_mode;
+    public $file_ext, $dirs, $db_mode, $backup_dir;
     
     #$db_mode = 'mysql';
 
@@ -187,16 +187,17 @@ class backup {
     // $this->$dirs     = array();
 
 
-    #$file_ext = [ 'jpg', 'bmp', 'png' ];
-    #$dirs[]   = 'img';
+    #$file_ext          = [ 'jpg', 'bmp', 'png' ];
+    #$dirs[]            = 'img';
     #$destintation_path = "sorted\\";
 
     
-    function __construct() {
+    public function __construct() {
 
         #not used yet
         #self::run();
         $this->db_mode = 'mysql';
+        $this->backup_dir = 'arkiv';
 
     }
 
@@ -242,17 +243,18 @@ class backup {
             
             $destination = $img->filename;
 
-            #$newfile = strtolower($dupe->filename);
-            #$newfile = str_replace("\/", '_', $newfile);
-            #$newfile = "duplicates\\$newfile";
+            #$newfile     = strtolower($dupe->filename);
+            #$newfile     = str_replace("\/", '_', $newfile);
+            #$newfile     = "duplicates\\$newfile";
 
             #$filename    = self::filename_from_path($img->filename);
             #$year        = date("Y",strtotime($img->datetaken));
             #$yearmonth   = date("ym",strtotime($img->datetaken));
             #$destination = "arkiv\\$year\\$yearmonth\\$filename";
             
-            $destination = str_replace(" ", '_', $destination);
-            $destination = strtolower($destination);
+            $destination  = str_replace("-", '_', $destination);
+            $destination  = str_replace(" ", '_', $destination);
+            $destination  = strtolower($destination);
 
             if ( $img->filename != $destination ){
                 if( self::mv($img, $img->filename, $destination) ){
@@ -296,6 +298,7 @@ class backup {
         // }
 
         foreach (R::findAll( 'img',"datetaken != '' " ) as $img) { # sort files with exif date directly into archive folders
+            
             if ( $img->datetaken != ''   ) {
                 #$newfile = strtolower($dupe->filename);
                 #$newfile = str_replace("\/", '_', $newfile);
@@ -303,9 +306,9 @@ class backup {
                 #$newfile = "duplicates\\$newfile";
 
                 $filename    = self::filename_from_path($img->filename);
-                $year        = date("Y",strtotime($img->datetaken));
-                $yearmonth   = date("ym",strtotime($img->datetaken));
-                $destination = "arkiv\\$year\\$yearmonth\\$filename";
+                $yyyy        = date("Y",strtotime($img->datetaken));
+                $yymm        = date("ym",strtotime($img->datetaken));
+                $destination = "arkiv\\$yyyy\\$yymm\\$filename";
                 $destination = strtolower($destination);
 
                 if( self::mv($img, $img->filename, $destination) ){
@@ -316,23 +319,36 @@ class backup {
             }
         }
 
-        foreach (R::findAll( 'img',"datetaken is NULL " ) as $img) { # sort files with exif date directly into archive folders
-            echo "\nSort by filedate $img->filename";
-            // if ( $img->datetaken != ''   ) {
-            //     #$newfile = strtolower($dupe->filename);
-            //     #$newfile = str_replace("\/", '_', $newfile);
-            //     #$newfile = str_replace("\\", '_', $newfile);
-            //     #$newfile = "duplicates\\$newfile";
+        foreach (R::findAll( 'img',"datetaken is NULL " ) as $img) {  
 
-            //     $filename    = self::filename_from_path($img->filename);
-            //     $year        = date("Y",strtotime($img->datetaken));
-            //     $yearmonth   = date("ym",strtotime($img->datetaken));
-            //     $destination = "arkiv\\$year\\$yearmonth\\$filename";
-            //     $destination = strtolower($destination);
+            # No exif data
+            
+            #if ( $img->datetaken != ''   ) {
+                #$newfile = strtolower($dupe->filename);
+                #$newfile = str_replace("\/", '_', $newfile);
+                #$newfile = str_replace("\\", '_', $newfile);
+                #$newfile = "duplicates\\$newfile";
 
-            //     if( self::mv($img, $img->filename, $destination) ){
-            //         echo "\nSorting filedate $img->filename -> $destination";
-            //     }
+                # todo prepend database id to filename to avoid filename conflicts
+
+                $filename    = self::filename_from_path($img->filename);
+                
+                $dotparts       = explode('.', $filename);
+                $ext            = $dotparts[count($dotparts)-1];
+
+
+                $yyyy        = date("Y",strtotime($img->filemtime));
+                $yymmdd        = date("ymd",strtotime($img->filemtime));
+
+
+                $filename    = date("ymd_His_".$img->id,strtotime($img->filemtime)).".$ext";
+                $destination = "arkiv\\$yyyy\\$yymmdd\\$filename";
+                $destination = strtolower($destination);
+
+                if( self::mv($img, $img->filename, $destination) ){
+                    #echo "\nSort by filedate $img->filename";
+                    echo "\nSort by filedate $img->filename -> $destination";
+                }
 
 
             #}
@@ -450,7 +466,13 @@ class backup {
         }
 
 
-        $file_ext = [ 'jpg', 'bmp', 'png','JPG','PNG' ];
+        $image_extensions = [ 'jpg', 'bmp', 'png', 'tif', 'tiff', 'jpeg' ];
+        $video_extensions = [ 'mov', 'mp4','wmv' ];
+        $audio_extensions = [ 'mp3', 'wav', 'ogg' ];
+
+
+
+        $file_ext = [ 'jpg', 'bmp', 'png' ];
         $dirs     = [ 'img','arkiv'];
         $files    = scanDir::scan($dirs, $file_ext, true); # dirs, file extensions, recurse
         $files    = array_unique($files); # scanDir lists dublicate files in subdirs
