@@ -297,7 +297,9 @@ class backup {
         //     }
         // }
 
-        foreach (R::findAll( 'img',"datetaken != '' " ) as $img) { # sort files with exif date directly into archive folders
+        foreach (R::findAll( 'img',"datetaken != '' " ) as $img) { 
+
+            # Sort by exif 
             
             if ( $img->datetaken != ''   ) {
                 #$newfile = strtolower($dupe->filename);
@@ -321,7 +323,7 @@ class backup {
 
         foreach (R::findAll( 'img',"datetaken is NULL " ) as $img) {  
 
-            # No exif data
+            # Sort by file date
             
             #if ( $img->datetaken != ''   ) {
                 #$newfile = strtolower($dupe->filename);
@@ -342,7 +344,7 @@ class backup {
 
 
                 $filename    = date("ymd_His_".$img->id,strtotime($img->filemtime)).".$ext";
-                $destination = "arkiv\\$yyyy\\$yymmdd\\$filename";
+                $destination = "arkiv\\$yyyy\\$yymm\\$filename";
                 $destination = strtolower($destination);
 
                 if( self::mv($img, $img->filename, $destination) ){
