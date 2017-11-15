@@ -121,6 +121,11 @@ backup::run();
 // }
 
 
+// print_r(hash_algos());
+// foreach (hash_algos() as $key => $algo) {
+
+//     echo "\n$algo: ". $h = hash_file($algo, 'arkiv\2008\080309\080309_132222_2060.jpg').' Length: '.strlen($h);
+// }
 
 
 class backup {
@@ -286,76 +291,7 @@ class backup {
 
     
     
-    public static function sort_files(){ # quick sort before archiving
-
-
-        $backup_dir = 'arkiv';
-        
-        
-
-        foreach (R::findAll( 'img',"datetaken != '' " ) as $img) { 
-
-            # Sort by exif 
-            
-            if ( $img->datetaken != ''   ) {
-                #$newfile = strtolower($dupe->filename);
-                #$newfile = str_replace("\/", '_', $newfile);
-                #$newfile = str_replace("\\", '_', $newfile);
-                #$newfile = "duplicates\\$newfile";
-
-                $filename    = self::filename_from_path($img->filename);
-                $yyyy        = date("Y",strtotime($img->datetaken));
-                $yymmdd      = date("ymd",strtotime($img->datetaken));
-                #$destination = "arkiv\\$yyyy\\$yymm\\$filename";
-                $destination = $backup_dir."\\$yyyy\\$yymmdd\\$filename";
-                $destination = strtolower($destination);
-
-                if( self::mv($img, $img->filename, $destination) ){
-                    echo "\nSort by EXIF date $img->filename -> $destination";
-                }
-
-
-            }
-        }
-
-        foreach (R::findAll( 'img',"datetaken is NULL " ) as $img) {  
-
-            # NO EXIF  > Sort by file date
-            
-            #if ( $img->datetaken != ''   ) {
-                #$newfile = strtolower($dupe->filename);
-                #$newfile = str_replace("\/", '_', $newfile);
-                #$newfile = str_replace("\\", '_', $newfile);
-                #$newfile = "duplicates\\$newfile";
-
-                # todo prepend database id to filename to avoid filename conflicts
-
-                $filename    = self::filename_from_path($img->filename);
-                
-                $dotparts       = explode('.', $filename);
-                $ext            = $dotparts[count($dotparts)-1];
-
-
-                $yyyy        = date("Y",strtotime($img->filemtime));
-                $yymmdd        = date("ymd",strtotime($img->filemtime));
-
-
-                $filename    = date("ymd_His_".$img->id,strtotime($img->filemtime)).".$ext";
-                #$destination = "arkiv\\$yyyy\\$yymm\\$filename";
-                $destination = $backup_dir."\\$yyyy\\$yymmdd\\$filename";
-                $destination = strtolower($destination);
-
-                if( self::mv($img, $img->filename, $destination) ){
-                    #echo "\nSort by filedate $img->filename";
-                    echo "\nSort by filedate $img->filename -> $destination";
-                }
-
-
-            #}
-        }
-
-
-
+    public static function sort_files(){ # rename & move  all files to into archive
 
         function validate($input){
 
@@ -367,10 +303,28 @@ class backup {
             }
         }
 
+        function datemapp($input){
 
+            $validformat = "*^[0-9]{6}$*";
+            if ( preg_match($validformat, $input) ){
+                return 1;
+            }else{
+                return 0;
+            }
+        }
 
+        function dir_valid($input){
 
-        # old rename check merge functions
+            $validformat = "*^[0-9]{6}_*";
+            if ( preg_match($validformat, $input) ){
+                return 1;
+            }else{
+                return 0;
+            }
+        }
+
+        $backup_dir = 'arkiv';
+
 
         foreach (R::findAll( 'img' ) as $img) {  
 
@@ -380,100 +334,93 @@ class backup {
             $exploded       = explode('.', $filename);
             $ext            = $exploded[count($exploded)-1];
 
-            if (!validate($filename)){ # filename is bad
-                
+            #org dir
+            $dirs           = explode('\\', $img->filename_original);
+            $dir_org        = $dirs[count($dirs)-2];
 
-                if ($img->datetaken == '' || $img->datetaken == NULL){  # HAS exif   rename to filedate
-
-                    $filename_from_date = date("ymd_His_".$img->id,strtotime($img->filemtime)).".$ext";
-                    $filename_from_date =  strtolower($filename_from_date);
-
-
-                    $yyyy        = date("Y",strtotime($img->filemtime));
-                    $yymmdd      = date("ymd",strtotime($img->filemtime));
-
-
-                    #$filename    = date("ymd_His_".$img->id,strtotime($img->filemtime)).".$ext";
-                    $destination = $backup_dir."\\$yyyy\\$yymmdd\\$filename_from_date";
-                    $destination = strtolower($destination);
-                    $msg = 'date sort';
-                }
-
-                if ($img->datetaken == ''){  # no exif   rename to filedate
-
-                    $filename_from_date = date("ymd_His_".$img->id,strtotime($img->filemtime)).".$ext";
-                    $filename_from_date =  strtolower($filename_from_date);
-
-
-                    $yyyy        = date("Y",strtotime($img->filemtime));
-                    $yymmdd      = date("ymd",strtotime($img->filemtime));
-
-
-                    #$filename    = date("ymd_His_".$img->id,strtotime($img->filemtime)).".$ext";
-                    $destination = $backup_dir."\\$yyyy\\$yymmdd\\$filename_from_date";
-                    $destination = strtolower($destination);
-                    $msg = 'exif sort';
-                }
+            #current dir
+            $dirs           = explode('\\', $img->filename);
+            $dir_now        = $dirs[count($dirs)-2];
 
 
 
+            # optional reuse old pre dir from import
+            if( datemapp($dir_now) ){  # boring dir
+
+                $new = preg_replace("*^[0-9]{6}*", '', $dir_org );
+                $new = $dir_now.'_'.$new;
+                $new = str_replace('__', '_', $new); 
 
             }
 
 
 
 
-            #path remake check
-            #if ($img->datetaken != ''){  # no exif   rename to filedate
+
+            if ( $img->datetaken == '' || is_null($img->datetaken) ) {  # No EXIF
+
+                $destination = date("ymd_Hi",strtotime($img->filemtime))."_$img->crc.$ext";
+
+                $Y        = date("Y",  strtotime($img->filemtime));
+                $ymd      = date("ymd",strtotime($img->filemtime));
 
 
 
+                if (isset($new)){
+                    $ymd = $new;
+                }
 
+                if ( dir_valid($dir_now) ){
+                    $dir = $dir_now;
+                }else{
+                    $dir = $ymd;
+                }
+
+                $destination = $backup_dir."\\$Y\\$dir\\$destination";
+                $destination = strtolower($destination);
+                $msg = 'date';
+            }
+
+            if ($img->datetaken != '' || !is_null($img->datetaken) ){  #  exif   rename to filedate
+
+                $destination = date("ymd_Hi_".$img->crc,strtotime($img->datetaken)).".$ext";
+
+
+                $Y        = date("Y",  strtotime($img->datetaken));
+                $ymd      = date("ymd",strtotime($img->datetaken));
+
+                if (isset($new)){
+                    $ymd = $new;
+                }
+
+                if ( dir_valid($dir_now) ){
+                    $dir = $dir_now;
+                }else{
+                    $dir = $ymd;
+                }
+
+
+                $destination = $backup_dir."\\$Y\\$dir\\$destination";
+                $destination = strtolower($destination);
+                $msg = 'exif';
+            }
+
+            unset($new);
 
 
             if ($img->filename != $destination){
 
                 if (self::mv($img,$img->filename,$destination)){
-                    echo "\nFix filename: $filename -> $destination";
+                    echo "\nSorting [$msg]: $img->filename -> $destination";
                     $img->filename = $destination;
                     R::store($img);
                 }
             }
 
-
-        } # end of file checks
-
-
-
-
-
-
+        } 
     }
 
-    public static function fix_filenames(){ 
-
-        /**
-
-            Figure out what any file path + name should be. 
-            If it's not, then fix and move it.
-
-            Rename file to date format yymmdd_hhiiss_id.ext
-            but dont move
-
-        **/
-
-
-
-
-
-        $backup_dir = "arkiv";
-        
-
-
-
-    }
-
-
+    
     public static function mv($img,$src,$dst){
 
         if ($src != $dst){
@@ -600,7 +547,8 @@ class backup {
         $files    = array_unique($files); # scanDir lists dublicate files in subdirs
 
         foreach ( $files as $filename){
-            
+
+
             if (file_exists($filename) && is_file($filename)) {
 
 
@@ -609,20 +557,36 @@ class backup {
                     #echo "$filename was last accessed: " . date("F d Y H:i:s.", fileatime($filename));
                     #$filemtime =  date("Y-m-d H:i:s", filemtime($filename));
                     #echo "Saving to db: $filename size " . filesize($filename) . " $date \n";
+                    #$filename_utf8 = utf8_decode($filename);;
+
+
+                    
+                    #$filename = utf8_encode($filename);
+                    #$filename = $filename_utf8;
+                    #$filename = utf8_encode($filename); 
                     echo "\nFound: $filename ";
                     
                     $filecontents  = file_get_contents($filename);  #refactor to calc hash in own method
-                    echo $md5           = md5($filecontents);   
+                    $md5           = md5($filecontents);   
+                    echo $md5;
+
+                    $crc           = hash_file('crc32b', $filename);
+                    echo  " ".$crc;
 
                     $r             = R::dispense( 'img' );
+                    $r->md5        = $md5;
+                    $r->crc        = $crc;
                     $r->exif       = '';
                     $r->gps        = '';
                     $r->dup        = '';
                     $r->hasexif    = ''; #default unset until checked
                     $r->md5        = $md5;
+                    #$r->hash        = hash_file('crc32b', $filename);
+                    
                     $r->filemtime  = date("Y-m-d H:i:s", filemtime($filename));
                     #$r->datetaken  = '';
-                    $r->filename   = $filename;
+                    $r->filename_original   = $filename;
+                    $r->filename     = $filename;
                     $r->created_at = date("Y-m-d H:i:s"); #found at
                     #$r->updated_at = NULL;
                     #$r->deleted_at = NULL;
@@ -946,7 +910,6 @@ class backup {
         R::nuke($table);
 
         $new = R::dispense( $table );
-        $new->setMeta('buildcommand.unique', array('filename'));
         $new->filename = 'initial';
         $new->md5      = 'md5';
         $new->filedate = '';
@@ -1005,6 +968,71 @@ class backup {
             #echo "\nno dupes";
         }
     }
+
+    public static function stripText($text, $separator = '-'){
+        $bad = array(
+          'À','à','Á','á','Â','â','Ã','ã','Ä','ä','Å','å','Ă','ă','Ą','ą',
+          'Ć','ć','Č','č','Ç','ç',
+          'Ď','ď','Đ','đ',
+          'È','è','É','é','Ê','ê','Ë','ë','Ě','ě','Ę','ę',
+          'Ğ','ğ',
+          'Ì','ì','Í','í','Î','î','Ï','ï',
+          'Ĺ','ĺ','Ľ','ľ','Ł','ł',
+          'Ñ','ñ','Ň','ň','Ń','ń',
+          'Ò','ò','Ó','ó','Ô','ô','Õ','õ','Ö','ö','Ø','ø','ő',
+          'Ř','ř','Ŕ','ŕ',
+          'Š','š','Ş','ş','Ś','ś',
+          'Ť','ť','Ť','ť','Ţ','ţ',
+          'Ù','ù','Ú','ú','Û','û','Ü','ü','Ů','ů',
+          'Ÿ','ÿ','ý','Ý',
+          'Ž','ž','Ź','ź','Ż','ż',
+          'Þ','þ','Ð','ð','ß','Œ','œ','Æ','æ','µ',
+          '”','“','‘','’',"'","\n","\r",'_');
+            
+          $good = array(
+          'A','a','A','a','A','a','A','a','Ae','ae','A','a','A','a','A','a',
+          'C','c','C','c','C','c',
+          'D','d','D','d',
+          'E','e','E','e','E','e','E','e','E','e','E','e',
+          'G','g',
+          'I','i','I','i','I','i','I','i',
+          'L','l','L','l','L','l',
+          'N','n','N','n','N','n',
+          'O','o','O','o','O','o','O','o','Oe','oe','O','o','o',
+          'R','r','R','r',
+          'S','s','S','s','S','s',
+          'T','t','T','t','T','t',
+          'U','u','U','u','U','u','Ue','ue','U','u',
+          'Y','y','Y','y',
+          'Z','z','Z','z','Z','z',
+          'TH','th','DH','dh','ss','OE','oe','AE','ae','u',
+          '','','','','','','','-');
+            
+          // convert special characters
+          $text = str_replace($bad, $good, $text);
+            
+          // convert special characters
+          $text = utf8_decode($text);
+          $text = htmlentities($text);
+          #$text = preg_replace('/&([a-zA-Z])(uml|acute|grave|circ|tilde);/', '$1', $text);
+          $text = html_entity_decode($text);
+          
+          $text = strtolower($text);
+            
+          // strip all non word chars
+          #$text = preg_replace('/\W/', ' ', $text);
+            
+          // replace all white space sections with a separator
+          $text = preg_replace('/\ +/', $separator, $text);
+        
+          // trim separators
+          $text = trim($text, $separator);
+          //$text = preg_replace('/\-$/', '', $text);
+          //$text = preg_replace('/^\-/', '', $text);
+              
+          return $text;
+    }
+
 
 
 }
