@@ -383,7 +383,7 @@ class backup {
 
             if ($img->datetaken != '' || !is_null($img->datetaken) ){  #  exif   rename to filedate
 
-                $destination = date("ymd_Hi_".$img->crc,strtotime($img->datetaken)).".$ext";
+                $destination = date("ymd_Hi",strtotime($img->datetaken))."_$img->crc.$ext";
 
 
                 $Y        = date("Y",  strtotime($img->datetaken));
