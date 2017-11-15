@@ -351,6 +351,9 @@ class backup {
                 $new = $dir_now.'_'.$new;
                 $new = str_replace('__', '_', $new); 
 
+                if ( preg_match("*^[0-9]{6}_$*", $new) ){ # same shit, no diff
+                    unset($new);
+                }
             }
 
 
@@ -470,6 +473,8 @@ class backup {
                     echo "Failed!\nfailed to move $dupe->filename to $newfile";
                 }else{
                     echo "done.";
+                    #$dupe->filename = $newfile;
+                    #R::store( $dupe );
                     R::trash( $dupe );
                 }
             }
